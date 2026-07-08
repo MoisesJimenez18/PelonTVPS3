@@ -116,7 +116,7 @@
   // --- URL del cache estático generado por GitHub Actions (ver repo
   // pelontv-cache). Reemplazá TU_USUARIO/TU_REPO por los tuyos. Esto es
   // lo que reemplaza la consulta directa a Firestore para listar. ---
-  var CACHE_BASE_URL = "https://raw.githubusercontent.com/TU_USUARIO/TU_REPO/main/output/";
+  var CACHE_BASE_URL = "https://raw.githubusercontent.com/MoisesJimenez18/PelonTVPS3/main/output/";
 
   function fetchTitulos(cat) {
     var url = CACHE_BASE_URL + cat + ".json";
