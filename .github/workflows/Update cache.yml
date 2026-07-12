@@ -5,6 +5,10 @@ on:
     - cron: "*/15 * * * *"
   workflow_dispatch:
 
+concurrency:
+  group: pelontv-cache-build
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,9 +22,41 @@ jobs:
       - run: node scripts/build-cache.js
 
       - name: Comitear si hubo cambios
+        id: commit
         run: |
           git config user.name "pelontv-bot"
           git config user.email "bot@pelontv.local"
           git add output/
-          git diff --staged --quiet || git commit -m "Actualizar cache [skip ci]"
-          git push
+          if git diff --staged --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "Actualizar cache [skip ci]"
+
+            success=false
+            for i in 1 2 3 4 5; do
+              git fetch origin main
+              if git rebase origin/main && git push; then
+                success=true
+                break
+              fi
+              git rebase --abort 2>/dev/null || true
+              echo "Push rechazado (intento $i/5), reintentando..."
+              sleep $((RANDOM % 6 + 2))
+            done
+
+            if [ "$success" != "true" ]; then
+              echo "No se pudo pushear después de varios intentos, abortando"
+              exit 1
+            fi
+
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Purgar cache de jsdelivr
+        if: steps.commit.outputs.changed == 'true'
+        run: |
+          for cat in peliculas series anime tv; do
+            echo "Purgando $cat..."
+            curl -s -o /dev/null -w "  -> %{http_code}\n" \
+              "https://purge.jsdelivr.net/gh/${{ github.repository_owner }}/PelonTVPS3@main/output/${cat}.json"
+          done
