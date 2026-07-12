@@ -120,6 +120,18 @@ function leerJsonPrevio(cat) {
 // falta". ---
 const FULL_RESYNC = process.env.FULL_RESYNC === "true";
 
+// --- Colchón de seguridad: en vez de pedir "mayor al timestamp más nuevo
+// que vimos", pedimos "mayor a ESE timestamp menos X horas". Esto cubre
+// el caso de que el scraper escriba un documento con timestamp más viejo
+// DESPUÉS de que el cursor ya avanzó por otro documento más nuevo (por
+// ej. corridas del scraper en distinto orden, o timestamps que no quedan
+// perfectamente ordenados). Sin esto, ese documento queda huérfano para
+// siempre en el modo incremental, porque nunca es "mayor" al cursor. El
+// costo extra es mínimo: solo se releen los documentos de esta ventana
+// (no toda la colección), y como el merge es por slug, releer algo que
+// ya teníamos no genera duplicados. ---
+const BUFFER_MS = 48 * 60 * 60 * 1000; // 2 días de margen
+
 async function buildCache() {
   if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
 
@@ -140,7 +152,13 @@ async function buildCache() {
         if (parseTimestamp(it.timestamp) > parseTimestamp(cursor)) cursor = it.timestamp;
       }
 
-      const nuevos = cursor ? await fetchNuevosDesde(cat, cursor) : await fetchColeccionCompleta(cat);
+      // Le restamos el colchón de seguridad al cursor real antes de
+      // consultar, para no perder documentos que llegaron "atrasados".
+      const cursorConMargen = cursor
+        ? new Date(parseTimestamp(cursor) - BUFFER_MS).toISOString()
+        : cursor;
+
+      const nuevos = cursor ? await fetchNuevosDesde(cat, cursorConMargen) : await fetchColeccionCompleta(cat);
       console.log(`${cat}: ${nuevos.length} documentos nuevos/actualizados desde la última corrida`);
 
       const porSlug = new Map(previo.items.map((it) => [it.slug, it]));
