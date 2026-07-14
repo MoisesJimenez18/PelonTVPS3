@@ -1,0 +1,11 @@
+{
+  "type": "ecmascript",
+  "apiversion": 1,
+  "id": "testpelontv",
+  "file": "miplugin.js",
+  "title": "PelonTV",
+  "synopsis": "Peliculas, Series, TV en Vivo",
+  "category": "video",
+  "version": "1.0.0",
+  "author": "Moises"
+}
