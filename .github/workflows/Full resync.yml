@@ -53,12 +53,3 @@ jobs:
 
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Purgar cache de jsdelivr
-        if: steps.commit.outputs.changed == 'true'
-        run: |
-          for cat in peliculas series anime tv; do
-            echo "Purgando $cat..."
-            curl -s -o /dev/null -w "  -> %{http_code}\n" \
-              "https://purge.jsdelivr.net/gh/${{ github.repository_owner }}/PelonTVPS3@main/output/${cat}.json"
-          done
