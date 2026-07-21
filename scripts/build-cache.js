@@ -11,11 +11,51 @@
 
 const fs = require("fs");
 const path = require("path");
+const sharp = require("sharp");
 
 const PROJECT_ID = "pelontv-91671";
 const CATEGORIAS = ["peliculas", "series", "anime", "tv"];
 const OUT_DIR = path.join(__dirname, "..", "output");
 const CAMPOS = ["titulo", "portada", "backdrop", "timestamp"];
+
+// --- Conversion de posters para PS2: la consola no puede decodificar JPEG,
+// asi que convertimos cada poster a un archivo "crudo" (RGBA sin comprimir,
+// tamano fijo 100x150) que la PS2 puede subir directo a la GS. Se guarda
+// en output/posters/{slug}.raw y se agrega el campo poster_ps2 al item,
+// SIN tocar el campo poster/portada original. Si ya existe el archivo,
+// no se vuelve a descargar (para no gastar de mas en cada corrida). ---
+const POSTER_W = 100;
+const POSTER_H = 150;
+const POSTERS_DIR = path.join(OUT_DIR, "posters");
+
+async function convertirPosterSiHaceFalta(item) {
+  if (!item.poster) return;
+
+  const outPath = path.join(POSTERS_DIR, `${item.slug}.raw`);
+  if (fs.existsSync(outPath)) {
+    item.poster_ps2 = `posters/${item.slug}.raw`;
+    return;
+  }
+
+  try {
+    const resp = await fetch(item.poster);
+    if (!resp.ok) throw new Error(`status ${resp.status}`);
+    const buffer = Buffer.from(await resp.arrayBuffer());
+
+    const raw = await sharp(buffer)
+      .resize(POSTER_W, POSTER_H, { fit: "fill" })
+      .ensureAlpha()
+      .raw()
+      .toBuffer();
+
+    fs.mkdirSync(POSTERS_DIR, { recursive: true });
+    fs.writeFileSync(outPath, raw);
+    item.poster_ps2 = `posters/${item.slug}.raw`;
+  } catch (err) {
+    console.error(`No se pudo convertir poster de ${item.slug}: ${err.message}`);
+  }
+}
+
 
 function unwrap(field) {
   if (!field) return null;
@@ -168,6 +208,13 @@ async function buildCache() {
       // Primera vez para esta categoría: lectura completa.
       items = await fetchColeccionCompleta(cat);
       console.log(`${cat}: primera sincronización, ${items.length} documentos`);
+    }
+
+    const TANDA = 10;
+    for (let i = 0; i < items.length; i += TANDA) {
+      const tanda = items.slice(i, i + TANDA);
+      await Promise.all(tanda.map((item) => convertirPosterSiHaceFalta(item)));
+      console.log(`${cat}: posters ${Math.min(i + TANDA, items.length)}/${items.length}`);
     }
 
     items.sort((a, b) => parseTimestamp(b.timestamp) - parseTimestamp(a.timestamp));

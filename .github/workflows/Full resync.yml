@@ -19,6 +19,8 @@ jobs:
         with:
           node-version: 20
 
+      - run: npm ci
+
       - run: node scripts/build-cache.js
         env:
           FULL_RESYNC: "true"
